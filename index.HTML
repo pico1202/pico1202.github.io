@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>狗狗消消樂 Mobile</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            touch-action: manipulation; /* 優化點擊反應速度 */
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #e6ffe6;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh; /* 填滿整個手機螢幕 */
+            margin: 0;
+            overflow: hidden; /* 禁止滑動背景 */
+            user-select: none;
+            -webkit-user-select: none; /* iOS 支援 */
+        }
+
+        h1 {
+            color: #5d4037;
+            margin: 10px 0;
+            font-size: 1.5rem;
+            text-shadow: 2px 2px #fff;
+        }
+
+        .stats-board {
+            display: flex;
+            justify-content: space-between;
+            width: 90vw; /* 寬度佔螢幕 90% */
+            max-width: 400px;
+            margin-bottom: 10px;
+            font-size: 1rem;
+            font-weight: bold;
+            color: #5d4037;
+            background: #fff;
+            padding: 8px 15px;
+            border-radius: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        /* 遊戲棋盤容器：改用百分比寬度 */
+        #game-board {
+            display: grid;
+            width: 90vw;  /* 寬度佔螢幕 90% */
+            height: 90vw; /* 高度等於寬度 (正方形) */
+            max-width: 400px;
+            max-height: 400px;
+            grid-template-columns: repeat(8, 1fr); /* 8等分 */
+            grid-template-rows: repeat(8, 1fr);
+            gap: 2px;
+            background-color: #8d6e63;
+            padding: 5px;
+            border-radius: 10px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+            position: relative;
+        }
+
+        .tile {
+            width: 100%;
+            height: 100%;
+            background-color: #fff8e1;
+            border-radius: 15%; /* 圓角 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 6vw; /* 字體大小隨螢幕縮放 */
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        
+        /*在大螢幕上限制最大字體*/
+        @media (min-width: 450px) {
+            .tile { font-size: 28px; }
+        }
+
+        .tile.selected {
+            background-color: #ffeb3b;
+            transform: scale(0.9);
+            border: 2px solid #f57f17;
+            box-shadow: 0 0 5px #f57f17;
+            z-index: 10;
+        }
+
+        .tile.matched {
+            animation: pop 0.3s ease-out forwards;
+        }
+
+        @keyframes pop {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(0); opacity: 0; }
+        }
+
+        #game-over {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            z-index: 100;
+            border-radius: 10px;
+        }
+        
+        button {
+            padding: 12px 30px;
+            font-size: 1.2rem;
+            background: #4caf50;
+            color: white;
+            border: none;
+            border-radius: 50px;
+            box-shadow: 0 4px #2e7d32;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        
+        button:active {
+            box-shadow: 0 2px #2e7d32;
+            transform: translateY(2px);
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🐶 狗狗消消樂</h1>
+
+    <div class="stats-board">
+        <div id="score">分數: 0</div>
+        <div id="moves">步數: 20</div>
+    </div>
+
+    <div style="position: relative;">
+        <div id="game-board"></div>
+        
+        <div id="game-over">
+            <h2 style="font-size: 2rem; margin:0;">遊戲結束</h2>
+            <p id="final-score" style="font-size: 1.5rem;">分數: 0</p>
+            <button onclick="initGame()">再玩一次</button>
+        </div>
+    </div>
+
+    <script>
+        // 邏輯部分與之前完全相同，但為了完整性我保留在這裡
+        const width = 8;
+        const grid = document.getElementById('game-board');
+        const scoreDisplay = document.getElementById('score');
+        const movesDisplay = document.getElementById('moves');
+        const gameOverScreen = document.getElementById('game-over');
+        const finalScoreDisplay = document.getElementById('final-score');
+        
+        let squares = [];
+        let score = 0;
+        let moves = 20;
+        
+        const dogColors = ['🐶', '🐺', '🦊', '🦁', '🐻', '🐼'];
+
+        let selectedTile = null;
+        let selectedIndex = null;
+
+        function initGame() {
+            grid.innerHTML = '';
+            squares = [];
+            score = 0;
+            moves = 20;
+            scoreDisplay.innerHTML = '分數: ' + score;
+            movesDisplay.innerHTML = '步數: ' + moves;
+            gameOverScreen.style.display = 'none';
+            createBoard();
+            setTimeout(checkMatches, 100);
+        }
+
+        function createBoard() {
+            for (let i = 0; i < width * width; i++) {
+                const square = document.createElement('div');
+                square.setAttribute('id', i);
+                square.classList.add('tile');
+                let randomColor = Math.floor(Math.random() * dogColors.length);
+                square.innerHTML = dogColors[randomColor];
+                square.setAttribute('data-type', dogColors[randomColor]);
+                grid.appendChild(square);
+                squares.push(square);
+
+                // 同時支援滑鼠點擊與手指觸控
+                square.addEventListener('click', function() {
+                    clickTile(this, i);
+                });
+            }
+        }
+
+        function clickTile(tile, index) {
+            if (moves <= 0) return;
+
+            if (selectedTile === null) {
+                selectedTile = tile;
+                selectedIndex = index;
+                tile.classList.add('selected');
+            } else {
+                let currentTile = tile;
+                let currentIndex = index;
+                
+                if (currentTile === selectedTile) {
+                    selectedTile.classList.remove('selected');
+                    selectedTile = null;
+                    selectedIndex = null;
+                    return;
+                }
+
+                selectedTile.classList.remove('selected');
+                
+                const isAdjacent = [1, -1, width, -width].includes(currentIndex - selectedIndex);
+                
+                // 邊界檢查
+                const isRightEdge = selectedIndex % width === width - 1;
+                const isLeftEdge = selectedIndex % width === 0;
+                if (isRightEdge && currentIndex === selectedIndex + 1) return;
+                if (isLeftEdge && currentIndex === selectedIndex - 1) return;
+
+                if (isAdjacent) {
+                    swapTiles(selectedTile, currentTile);
+                    selectedTile = null;
+                    selectedIndex = null;
+                } else {
+                    selectedTile = currentTile;
+                    selectedIndex = currentIndex;
+                    selectedTile.classList.add('selected');
+                }
+            }
+        }
+
+        function swapTiles(tile1, tile2) {
+            const tempType = tile1.getAttribute('data-type');
+            const tempHtml = tile1.innerHTML;
+            tile1.setAttribute('data-type', tile2.getAttribute('data-type'));
+            tile1.innerHTML = tile2.innerHTML;
+            tile2.setAttribute('data-type', tempType);
+            tile2.innerHTML = tempHtml;
+
+            let matchFound = checkMatches();
+
+            if (!matchFound) {
+                setTimeout(() => {
+                    tile2.setAttribute('data-type', tile1.getAttribute('data-type'));
+                    tile2.innerHTML = tile1.innerHTML;
+                    tile1.setAttribute('data-type', tempType);
+                    tile1.innerHTML = tempHtml;
+                }, 300);
+            } else {
+                moves--;
+                movesDisplay.innerHTML = '步數: ' + moves;
+                checkGameOver();
+            }
+        }
+
+        function checkMatches() {
+            let matchFound = false;
+            // 簡化版的橫向檢查
+            for (let i = 0; i < 64; i++) {
+                if (i % width > width - 3) continue;
+                let rowOfThree = [i, i + 1, i + 2];
+                let decidedColor = squares[i].getAttribute('data-type');
+                const isBlank = squares[i].getAttribute('data-type') === '';
+                if (rowOfThree.every(index => squares[index].getAttribute('data-type') === decidedColor && !isBlank)) {
+                    score += 10;
+                    scoreDisplay.innerHTML = '分數: ' + score;
+                    rowOfThree.forEach(index => {
+                        squares[index].classList.add('matched');
+                        squares[index].innerHTML = '';
+                        squares[index].setAttribute('data-type', '');
+                    });
+                    matchFound = true;
+                }
+            }
+            // 簡化版的縱向檢查
+            for (let i = 0; i < 47; i++) { 
+                let columnOfThree = [i, i + width, i + width * 2];
+                let decidedColor = squares[i].getAttribute('data-type');
+                const isBlank = squares[i].getAttribute('data-type') === '';
+                if (columnOfThree.every(index => squares[index].getAttribute('data-type') === decidedColor && !isBlank)) {
+                    score += 10;
+                    scoreDisplay.innerHTML = '分數: ' + score;
+                    columnOfThree.forEach(index => {
+                        squares[index].classList.add('matched');
+                        squares[index].innerHTML = '';
+                        squares[index].setAttribute('data-type', '');
+                    });
+                    matchFound = true;
+                }
+            }
+            if (matchFound) {
+                setTimeout(moveDown, 350);
+                return true;
+            }
+            return false;
+        }
+
+        function moveDown() {
+            for (let i = 0; i < 56; i++) {
+                if (squares[i + width].getAttribute('data-type') === '') {
+                    squares[i + width].setAttribute('data-type', squares[i].getAttribute('data-type'));
+                    squares[i + width].innerHTML = squares[i].innerHTML;
+                    squares[i + width].classList.remove('matched');
+                    squares[i].setAttribute('data-type', '');
+                    squares[i].innerHTML = '';
+                }
+            }
+            for (let i = 0; i < width; i++) {
+                if (squares[i].getAttribute('data-type') === '') {
+                    let randomColor = Math.floor(Math.random() * dogColors.length);
+                    squares[i].setAttribute('data-type', dogColors[randomColor]);
+                    squares[i].innerHTML = dogColors[randomColor];
+                    squares[i].classList.remove('matched');
+                }
+            }
+            let hasBlank = squares.some(s => s.getAttribute('data-type') === '');
+            if (hasBlank) setTimeout(moveDown, 100);
+            else checkMatches();
+        }
+        
+        function checkGameOver() {
+            if (moves <= 0) {
+                setTimeout(() => {
+                    gameOverScreen.style.display = 'flex';
+                    finalScoreDisplay.innerText = '最終分數: ' + score;
+                }, 500);
+            }
+        }
+
+        initGame();
+    </script>
+</body>
+</html>
