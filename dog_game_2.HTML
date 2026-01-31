@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>狗狗消消樂 - 豪華版</title>
+    <style>
+        * { box-sizing: border-box; touch-action: manipulation; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #2c3e50;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+            color: white;
+        }
+
+        /* 頂部資訊欄 */
+        .header {
+            width: 95vw;
+            max-width: 450px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(0,0,0,0.3);
+            padding: 10px;
+            border-radius: 15px;
+            margin-bottom: 10px;
+        }
+        .level-info { font-size: 1.2rem; font-weight: bold; color: #f1c40f; }
+        .moves-box { font-size: 1.1rem; }
+
+        /* 目標顯示區 */
+        .goals-container {
+            display: flex;
+            gap: 15px;
+            background: rgba(255,255,255,0.1);
+            padding: 5px 15px;
+            border-radius: 20px;
+            margin-bottom: 10px;
+        }
+        .goal-item { display: flex; align-items: center; gap: 5px; font-size: 1.1rem; }
+        .goal-done { opacity: 0.5; text-decoration: line-through; color: #2ecc71; }
+
+        /* 遊戲棋盤 */
+        #game-board {
+            display: grid;
+            width: 92vw;
+            height: 92vw;
+            max-width: 400px;
+            max-height: 400px;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            gap: 3px;
+            background-color: #ecf0f1;
+            padding: 5px;
+            border-radius: 12px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+            position: relative;
+            transition: transform 0.1s;
+        }
+
+        /* 連擊時的閃電震動效果 */
+        .shake-board { animation: shake 0.3s cubic-bezier(.36,.07,.19,.97) both; border: 3px solid #f1c40f; }
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-1px, 0, 0); }
+            20%, 80% { transform: translate3d(2px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+            40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+
+        .tile {
+            width: 100%;
+            height: 100%;
+            background-color: #fff;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 6.5vw;
+            cursor: pointer;
+            transition: transform 0.2s, background-color 0.2s;
+            position: relative;
+            z-index: 1;
+        }
+        @media (min-width: 450px) { .tile { font-size: 28px; } }
+
+        /* 選中狀態 */
+        .tile.selected {
+            transform: scale(0.9);
+            box-shadow: inset 0 0 10px #3498db;
+            background-color: #d6eaf8;
+        }
+
+        /* 💡 提示動畫 (呼吸燈) */
+        .tile.hint-anim {
+            animation: hintPulse 1.5s infinite;
+            background-color: #d1f2eb;
+            box-shadow: 0 0 15px #2ecc71;
+            z-index: 2;
+        }
+        @keyframes hintPulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.08); }
+            100% { transform: scale(1); }
+        }
+
+        /* 💥 消除特效 - 基礎設定 */
+        .tile.exploding {
+            z-index: 10;
+        }
+        
+        /* 3格消除 - 紅色爆破 */
+        .explode-3 {
+            animation: popRed 0.4s forwards;
+        }
+        @keyframes popRed {
+            0% { transform: scale(1); background: #ff7675; opacity: 1; }
+            50% { transform: scale(1.3); background: #d63031; }
+            100% { transform: scale(0); opacity: 0; }
+        }
+
+        /* 4格消除 - 紫色爆破 */
+        .explode-4 {
+            animation: popPurple 0.5s forwards;
+        }
+        @keyframes popPurple {
+            0% { transform: scale(1); background: #a29bfe; opacity: 1; }
+            50% { transform: scale(1.4); background: #6c5ce7; box-shadow: 0 0 20px #6c5ce7; }
+            100% { transform: scale(0); opacity: 0; }
+        }
+
+        /* 5格以上 - 白色聖光 */
+        .explode-5 {
+            animation: popWhite 0.6s forwards;
+        }
+        @keyframes popWhite {
+            0% { transform: scale(1); background: #dfe6e9; opacity: 1; }
+            40% { transform: scale(1.5); background: #ffffff; box-shadow: 0 0 30px #fff; }
+            100% { transform: scale(0); opacity: 0; }
+        }
+
+        /* 遊戲結束/過關 彈窗 */
+        #overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            text-align: center;
+            padding: 20px;
+        }
+        .overlay-title { font-size: 2.5rem; margin-bottom: 10px; }
+        .overlay-desc { font-size: 1.2rem; margin-bottom: 30px; color: #bdc3c7; }
+        .btn {
+            padding: 15px 40px;
+            font-size: 1.3rem;
+            background: #27ae60;
+            color: white;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 5px #1e8449;
+            transition: transform 0.1s;
+        }
+        .btn:active { transform: translateY(3px); box-shadow: 0 2px #1e8449; }
+        .btn.retry { background: #e74c3c; box-shadow: 0 5px #c0392b; }
+
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="level-info" id="level-display">關卡 1</div>
+        <div class="moves-box" id="moves-display">步數: 20</div>
+    </div>
+
+    <div class="goals-container" id="goals-display">
+        </div>
+
+    <div style="position: relative;">
+        <div id="game-board"></div>
+        
+        <div id="overlay">
+            <h2 class="overlay-title" id="overlay-title">過關!</h2>
+            <p class="overlay-desc" id="overlay-msg">恭喜完成目標</p>
+            <button class="btn" id="overlay-btn" onclick="nextLevel()">下一關</button>
+        </div>
+    </div>
+
+    <script>
+        const width = 8;
+        const grid = document.getElementById('game-board');
+        const levelDisplay = document.getElementById('level-display');
+        const movesDisplay = document.getElementById('moves-display');
+        const goalsContainer = document.getElementById('goals-display');
+        const overlay = document.getElementById('overlay');
+        const overlayTitle = document.getElementById('overlay-title');
+        const overlayMsg = document.getElementById('overlay-msg');
+        const overlayBtn = document.getElementById('overlay-btn');
+
+        // 擴充動物 Emoji (加入貓咪)
+        const animals = ['🐶', '🐱', '🦊', '🐻', '🐼', '🐨']; 
+        
+        // 關卡設定
+        const levels = [
+            { 
+                id: 1, 
+                moves: 20, 
+                goals: { '🐶': 10 }, 
+                msg: "新手上路：消除 10 隻狗狗" 
+            },
+            { 
+                id: 2, 
+                moves: 25, 
+                goals: { '🐱': 10, '🦊': 10 }, 
+                msg: "貓狐大戰：收集 10 貓 & 10 狐" 
+            },
+            { 
+                id: 3, 
+                moves: 30, 
+                goals: { '🐼': 15, '🐨': 15 }, 
+                msg: "動物園：收集 30 隻稀有動物" 
+            }
+        ];
+
+        let currentLevelIndex = 0;
+        let squares = [];
+        let moves = 0;
+        let currentGoals = {};
+        let gameState = 'PLAYING'; // PLAYING, WAITING, ENDED
+        
+        // 變數
+        let selectedTile = null;
+        let hintTimer = null;
+        let isCombo = false; // 是否為連擊狀態
+
+        // --- 初始化系統 ---
+
+        function startLevel(levelIndex) {
+            if(levelIndex >= levels.length) {
+                // 通關所有關卡
+                showOverlay("全破恭喜！", "你是真正的消除大師！", "重玩", () => location.reload());
+                return;
+            }
+
+            currentLevelIndex = levelIndex;
+            const levelConfig = levels[levelIndex];
+            
+            // 設定變數
+            moves = levelConfig.moves;
+            // 深拷貝目標，以免修改到原始設定
+            currentGoals = JSON.parse(JSON.stringify(levelConfig.goals)); 
+            
+            // UI 更新
+            levelDisplay.innerText = `關卡 ${levelConfig.id}`;
+            movesDisplay.innerText = `步數: ${moves}`;
+            updateGoalsUI();
+            overlay.style.display = 'none';
+            grid.classList.remove('shake-board');
+
+            // 建立棋盤
+            createBoard();
+            gameState = 'PLAYING';
+            resetHintTimer();
+        }
+
+        function createBoard() {
+            grid.innerHTML = '';
+            squares = [];
+            for (let i = 0; i < width * width; i++) {
+                const square = document.createElement('div');
+                square.setAttribute('id', i);
+                square.classList.add('tile');
+                let randomColor = Math.floor(Math.random() * animals.length);
+                square.innerHTML = animals[randomColor];
+                square.setAttribute('data-type', animals[randomColor]);
+                
+                square.addEventListener('click', () => clickTile(square, i));
+                
+                grid.appendChild(square);
+                squares.push(square);
+            }
+            // 初始檢查消除
+            setTimeout(() => {
+                isCombo = false;
+                checkMatches();
+            }, 100);
+        }
+
+        // --- 核心邏輯 ---
+
+        function clickTile(tile, index) {
+            if (gameState !== 'PLAYING') return;
+            resetHintTimer(); // 重置提示計時
+
+            // 清除之前的提示樣式
+            clearHints();
+
+            if (!selectedTile) {
+                selectedTile = tile;
+                tile.classList.add('selected');
+            } else {
+                let prevTile = selectedTile;
+                selectedTile.classList.remove('selected');
+                selectedTile = null;
+
+                if (prevTile === tile) return; // 點同一個取消
+
+                // 檢查是否相鄰
+                let prevIndex = parseInt(prevTile.id);
+                let currIndex = index;
+                let validMoves = [prevIndex - 1, prevIndex + 1, prevIndex - width, prevIndex + width];
+                
+                // 處理左右邊界
+                if (prevIndex % width === 0 && currIndex === prevIndex - 1) return;
+                if (prevIndex % width === width - 1 && currIndex === prevIndex + 1) return;
+
+                if (validMoves.includes(currIndex)) {
+                    swapTiles(prevTile, tile);
+                } else {
+                    // 點太遠，改選新的
+                    selectedTile = tile;
+                    tile.classList.add('selected');
+                }
+            }
+        }
+
+        function swapTiles(tile1, tile2) {
+            gameState = 'WAITING'; // 鎖定操作
+            const type1 = tile1.getAttribute('data-type');
+            const type2 = tile2.getAttribute('data-type');
+
+            // 交換資料
+            tile1.setAttribute('data-type', type2);
+            tile1.innerHTML = type2;
+            tile2.setAttribute('data-type', type1);
+            tile2.innerHTML = type1;
+
+            // 檢查是否有效
+            isCombo = false; // 玩家主動交換不算 Combo
+            let hasMatch = checkMatches();
+
+            if (!hasMatch) {
+                // 無效交換，換回來
+                setTimeout(() => {
+                    tile1.setAttribute('data-type', type1);
+                    tile1.innerHTML = type1;
+                    tile2.setAttribute('data-type', type2);
+                    tile2.innerHTML = type2;
+                    gameState = 'PLAYING';
+                }, 300);
+            } else {
+                // 有效交換
+                moves--;
+                movesDisplay.innerText = `步數: ${moves}`;
+                if (moves === 0) checkWinCondition(); // 檢查步數用完
+            }
+        }
+
+        // 檢查消除 (支援 3, 4, 5 連線判定)
+        function checkMatches() {
+            let matchedTiles = new Set();
+            let matchGroups = []; // 儲存 { indices: [], type: '' }
+
+            // 橫向掃描
+            for (let r = 0; r < width; r++) {
+                for (let c = 0; c < width - 2; c++) {
+                    let i = r * width + c;
+                    let type = squares[i].getAttribute('data-type');
+                    if (type === '') continue;
+
+                    let matchLen = 1;
+                    while (c + matchLen < width && squares[r * width + (c + matchLen)].getAttribute('data-type') === type) {
+                        matchLen++;
+                    }
+
+                    if (matchLen >= 3) {
+                        let group = [];
+                        for (let k = 0; k < matchLen; k++) {
+                            let idx = r * width + c + k;
+                            matchedTiles.add(idx);
+                            group.push(idx);
+                        }
+                        matchGroups.push({ indices: group, len: matchLen });
+                        c += matchLen - 1; // 跳過已檢查
+                    }
+                }
+            }
+
+            // 縱向掃描
+            for (let c = 0; c < width; c++) {
+                for (let r = 0; r < width - 2; r++) {
+                    let i = r * width + c;
+                    let type = squares[i].getAttribute('data-type');
+                    if (type === '') continue;
+
+                    let matchLen = 1;
+                    while (r + matchLen < width && squares[(r + matchLen) * width + c].getAttribute('data-type') === type) {
+                        matchLen++;
+                    }
+
+                    if (matchLen >= 3) {
+                        let group = [];
+                        for (let k = 0; k < matchLen; k++) {
+                            let idx = (r + k) * width + c;
+                            matchedTiles.add(idx);
+                            group.push(idx);
+                        }
+                        matchGroups.push({ indices: group, len: matchLen });
+                        r += matchLen - 1;
+                    }
+                }
+            }
+
+            if (matchedTiles.size > 0) {
+                processMatches(matchGroups);
+                return true;
+            }
+            return false;
+        }
+
+        function processMatches(groups) {
+            // 處理特效與邏輯
+            
+            // 如果是連擊 (遞迴呼叫觸發)，加入閃電特效
+            if (isCombo) {
+                grid.classList.remove('shake-board');
+                void grid.offsetWidth; // 觸發 reflow 重啟動畫
+                grid.classList.add('shake-board');
+            }
+
+            // 收集所有要消除的格子的最大連線數 (為了決定顏色)
+            let indexToMaxLen = {};
+            
+            groups.forEach(group => {
+                group.indices.forEach(idx => {
+                    if (!indexToMaxLen[idx] || group.len > indexToMaxLen[idx]) {
+                        indexToMaxLen[idx] = group.len;
+                    }
+                });
+            });
+
+            // 執行消除
+            let processedTypes = {}; // 統計這次消除了甚麼
+
+            for (let idxStr in indexToMaxLen) {
+                let idx = parseInt(idxStr);
+                let tile = squares[idx];
+                let type = tile.getAttribute('data-type');
+                let len = indexToMaxLen[idx];
+
+                // 統計目標
+                if (type) {
+                    if (!processedTypes[type]) processedTypes[type] = 0;
+                    processedTypes[type]++;
+                }
+
+                // 添加爆炸動畫 Class
+                tile.classList.add('exploding');
+                if (len === 3) tile.classList.add('explode-3');
+                else if (len === 4) tile.classList.add('explode-4');
+                else if (len >= 5) tile.classList.add('explode-5');
+
+                // 延遲後真正清除數據
+                setTimeout(() => {
+                    tile.setAttribute('data-type', '');
+                    tile.innerHTML = '';
+                    tile.className = 'tile'; // 移除所有特效 class
+                }, 400); // 配合 CSS 動畫時間
+            }
+
+            // 更新目標進度
+            updateGoalsProgress(processedTypes);
+
+            // 掉落
+            setTimeout(() => {
+                moveDown();
+            }, 450);
+        }
+
+        function moveDown() {
+            for (let c = 0; c < width; c++) {
+                let emptyCount = 0;
+                for (let r = width - 1; r >= 0; r--) {
+                    let idx = r * width + c;
+                    if (squares[idx].getAttribute('data-type') === '') {
+                        emptyCount++;
+                    } else if (emptyCount > 0) {
+                        // 交換到下面
+                        let targetIdx = (r + emptyCount) * width + c;
+                        squares[targetIdx].setAttribute('data-type', squares[idx].getAttribute('data-type'));
+                        squares[targetIdx].innerHTML = squares[idx].innerHTML;
+                        squares[idx].setAttribute('data-type', '');
+                        squares[idx].innerHTML = '';
+                    }
+                }
+                // 補新方塊
+                for (let r = 0; r < emptyCount; r++) {
+                    let idx = r * width + c;
+                    let randomColor = Math.floor(Math.random() * animals.length);
+                    squares[idx].setAttribute('data-type', animals[randomColor]);
+                    squares[idx].innerHTML = animals[randomColor];
+                }
+            }
+
+            // 遞迴檢查 (連擊判定)
+            setTimeout(() => {
+                isCombo = true; // 這裡開始算連擊
+                let hasMatch = checkMatches();
+                if (!hasMatch) {
+                    gameState = 'PLAYING';
+                    checkWinCondition();
+                    resetHintTimer(); // 動作結束，開始算發呆時間
+                }
+            }, 200);
+        }
+
+        // --- 關卡與目標系統 ---
+
+        function updateGoalsUI() {
+            goalsContainer.innerHTML = '';
+            for (let [animal, count] of Object.entries(currentGoals)) {
+                let div = document.createElement('div');
+                div.classList.add('goal-item');
+                div.innerHTML = `${animal} x <span id="goal-${animal}">${count}</span>`;
+                goalsContainer.appendChild(div);
+            }
+        }
+
+        function updateGoalsProgress(processed) {
+            for (let type in processed) {
+                if (currentGoals[type] && currentGoals[type] > 0) {
+                    currentGoals[type] -= processed[type];
+                    if (currentGoals[type] < 0) currentGoals[type] = 0;
+                    
+                    // UI 更新
+                    let span = document.getElementById(`goal-${type}`);
+                    if (span) {
+                        span.innerText = currentGoals[type];
+                        if (currentGoals[type] === 0) {
+                            span.parentElement.classList.add('goal-done');
+                        }
+                    }
+                }
+            }
+        }
+
+        function checkWinCondition() {
+            // 檢查是否達成所有目標
+            let allDone = true;
+            for (let count of Object.values(currentGoals)) {
+                if (count > 0) allDone = false;
+            }
+
+            if (allDone) {
+                gameState = 'ENDED';
+                setTimeout(() => {
+                    showOverlay(`關卡 ${levels[currentLevelIndex].id} 完成!`, "太棒了！準備進入下一關", "下一關", nextLevel);
+                }, 500);
+            } else if (moves <= 0) {
+                gameState = 'ENDED';
+                setTimeout(() => {
+                    showOverlay("挑戰失敗", "步數用完了...", "重試", retryLevel);
+                }, 500);
+            }
+        }
+
+        // --- 提示系統 (超過10秒發亮) ---
+
+        function resetHintTimer() {
+            clearHints();
+            if (hintTimer) clearTimeout(hintTimer);
+            if (gameState === 'PLAYING') {
+                hintTimer = setTimeout(showHint, 10000); // 10秒
+            }
+        }
+
+        function showHint() {
+            // 尋找一個可消除的移動
+            // 簡單遍歷：每個格子試著往右或往下交換，看會不會消除
+            // 為了效能，這裡只做模擬不實際交換 DOM
+            
+            for (let i = 0; i < width * width; i++) {
+                let r = Math.floor(i / width);
+                let c = i % width;
+                let currentType = squares[i].getAttribute('data-type');
+
+                // 試探右邊
+                if (c < width - 1) {
+                    let rightIdx = i + 1;
+                    if (simulateSwap(i, rightIdx)) {
+                        highlightHint(i, rightIdx);
+                        return;
+                    }
+                }
+                // 試探下面
+                if (r < width - 1) {
+                    let downIdx = i + width;
+                    if (simulateSwap(i, downIdx)) {
+                        highlightHint(i, downIdx);
+                        return;
+                    }
+                }
+            }
+        }
+
+        // 模擬交換檢查
+        function simulateSwap(idx1, idx2) {
+            // 簡單邏輯：檢查交換後該位置是否形成3連
+            // 由於完整檢查很複雜，這裡簡化：只要任一方向能形成3連就算
+            // 實際上需要複雜的矩陣複製，這裡做一個輕量版檢查
+            
+            let gridTypes = squares.map(s => s.getAttribute('data-type'));
+            // 模擬交換
+            let temp = gridTypes[idx1];
+            gridTypes[idx1] = gridTypes[idx2];
+            gridTypes[idx2] = temp;
+
+            // 檢查 idx1 是否連線
+            if (checkLine(gridTypes, idx1)) return true;
+            // 檢查 idx2 是否連線
+            if (checkLine(gridTypes, idx2)) return true;
+
+            return false;
+        }
+
+        function checkLine(types, idx) {
+            let r = Math.floor(idx / width);
+            let c = idx % width;
+            let type = types[idx];
+            if (!type) return false;
+
+            // 橫向檢查
+            let hCount = 1;
+            // 往左
+            let k = 1; while(c-k >= 0 && types[r*width + (c-k)] === type) { hCount++; k++; }
+            // 往右
+            k = 1; while(c+k < width && types[r*width + (c+k)] === type) { hCount++; k++; }
+            if (hCount >= 3) return true;
+
+            // 縱向檢查
+            let vCount = 1;
+            // 往上
+            k = 1; while(r-k >= 0 && types[(r-k)*width + c] === type) { vCount++; k++; }
+            // 往下
+            k = 1; while(r+k < width && types[(r+k)*width + c] === type) { vCount++; k++; }
+            if (vCount >= 3) return true;
+
+            return false;
+        }
+
+        function highlightHint(idx1, idx2) {
+            squares[idx1].classList.add('hint-anim');
+            squares[idx2].classList.add('hint-anim');
+        }
+
+        function clearHints() {
+            squares.forEach(s => s.classList.remove('hint-anim'));
+        }
+
+        // --- 介面控制 ---
+
+        function showOverlay(title, desc, btnText, callback) {
+            overlayTitle.innerText = title;
+            overlayMsg.innerText = desc;
+            overlayBtn.innerText = btnText;
+            
+            if (btnText === "重試") {
+                overlayBtn.className = "btn retry";
+            } else {
+                overlayBtn.className = "btn";
+            }
+
+            overlayBtn.onclick = callback;
+            overlay.style.display = 'flex';
+        }
+
+        function nextLevel() {
+            startLevel(currentLevelIndex + 1);
+        }
+
+        function retryLevel() {
+            startLevel(currentLevelIndex);
+        }
+
+        // 啟動遊戲
+        startLevel(0);
+
+    </script>
+</body>
+</html>
