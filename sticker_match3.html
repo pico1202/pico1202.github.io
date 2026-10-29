@@ -25,6 +25,22 @@ canvas{position:fixed;inset:0;width:100vw;height:100vh;display:block}
 #ov h2{font:900 40px/1.2 "DFKai-SB","BiauKai","標楷體","KaiTi","STKaiti",serif;color:#ffe6a8;text-shadow:0 0 18px #ff9a30;letter-spacing:.15em}
 #ov p{margin:12px 0 18px;color:#f3dcb0;line-height:1.7}
 #ov button{font:700 16px/1 inherit;font-family:inherit;color:#2a1504;background:linear-gradient(180deg,#ffe3a0,#e0a83a);border:0;border-radius:10px;padding:12px 26px;cursor:pointer}
+#cfg{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(5,3,10,.7);backdrop-filter:blur(4px);z-index:20;padding:12px}
+#cfg.on{display:flex}
+#cfg .card{width:min(560px,100%);max-height:calc(100vh - 24px);overflow:auto;padding:18px;border-radius:18px;background:linear-gradient(180deg,rgba(70,36,12,.97),rgba(26,12,6,.97));border:2px solid #e8b860;box-shadow:0 0 40px rgba(255,190,80,.35)}
+#cfg h3{font:900 22px/1.3 "DFKai-SB","BiauKai","標楷體","KaiTi",serif;color:#ffe6a8;text-align:center;letter-spacing:.1em}
+#cfg .note{font-size:12px;color:#e8cfa0;text-align:center;margin:6px 0 12px;line-height:1.6}
+.slot{display:grid;grid-template-columns:76px 1fr;gap:10px;align-items:center;padding:8px;margin-bottom:8px;border-radius:12px;background:rgba(0,0,0,.25);border:2px solid var(--c)}
+.slot .pic{width:76px;height:76px;border-radius:12px;background:#fff center/contain no-repeat;border:3px solid var(--c);cursor:pointer;position:relative;box-shadow:0 0 12px var(--c)}
+.slot .pic span{position:absolute;right:-6px;bottom:-6px;background:var(--c);color:#fff;font-size:12px;border-radius:8px;padding:2px 6px;box-shadow:0 2px 4px rgba(0,0,0,.4)}
+.slot label{font-size:12px;color:#e8c27a}
+.slot input[type=text]{width:100%;margin-top:4px;font:700 15px/1.2 inherit;font-family:inherit;padding:8px 10px;border-radius:8px;border:1px solid rgba(240,190,90,.5);background:rgba(255,255,255,.92);color:#2a1504}
+.slot .row{display:flex;gap:6px;margin-top:6px}
+.slot .row button{font:600 12px/1 inherit;font-family:inherit;padding:6px 10px;border-radius:7px;border:0;cursor:pointer;background:rgba(255,255,255,.15);color:#f6ead0}
+#cfg .acts{display:flex;gap:8px;justify-content:center;margin-top:12px;flex-wrap:wrap}
+#cfg .acts button{font:700 15px/1 inherit;font-family:inherit;color:#2a1504;background:linear-gradient(180deg,#ffe3a0,#e0a83a);border:0;border-radius:10px;padding:11px 18px;cursor:pointer}
+#cfg .acts button.ghost{background:rgba(255,255,255,.12);color:#f6ead0;border:1px solid rgba(240,190,90,.5)}
+@media (max-width:480px){#bar{gap:5px}#bar button{padding:9px 8px;font-size:12px}}
 </style>
 </head>
 <body>
@@ -36,7 +52,14 @@ canvas{position:fixed;inset:0;width:100vw;height:100vh;display:block}
   <div class="box"><small>步數</small><b id="hMv">0</b></div>
   <div id="prog"><i id="hPr"></i></div>
 </div>
-<div id="bar"><button id="bHint">💡 提示</button><button id="bShuf">🔀 重排</button><button id="bSnd">🔊 音效</button><button id="bNew">↻ 重來</button></div>
+<div id="bar"><button id="bHint">💡 提示</button><button id="bShuf">🔀 重排</button><button id="bSnd">🔊 音效</button><button id="bPic">🖼 換圖</button><button id="bNew">↻ 重來</button></div>
+<div id="cfg"><div class="card">
+  <h3>🖼 自訂五張圖示</h3>
+  <div class="note">點圖片可上傳新圖（手機可直接拍照或選相簿），台詞是 5 顆連線時打出的大字。<br>圖片會自動縮小並存在這個瀏覽器裡，換裝置需要重新設定。</div>
+  <div id="slots"></div>
+  <div class="acts"><button id="cApply">✔ 套用</button><button id="cReset" class="ghost">↺ 全部恢復預設</button><button id="cClose" class="ghost">✕ 取消</button></div>
+  <input type="file" id="cFile" accept="image/*" hidden>
+</div></div>
 <div id="ov"><div class="card"><h2 id="ovT"></h2><p id="ovP"></p><button id="ovB"></button></div></div>
 <script>
 (() => {
@@ -56,7 +79,12 @@ const GEMS = [
   { name: '辛苦了', c1: '#c6ffd8', c2: '#22c55e', c3: '#053d1c', glow: '#3ee07a', title: '辛苦了！' },
   { name: '奴性堅強', c1: '#ecd0ff', c2: '#a855f7', c3: '#2c0a52', glow: '#b878ff', title: '奴性堅強！' },
 ];
-const PICS = IMGS.map(u => { const im = new Image(); im.src = u; return im; });
+const DEF_TITLES = GEMS.map(g => g.title), STORE = 'stickerMatch3.custom.v1';
+let custom = { imgs: [null, null, null, null, null], titles: DEF_TITLES.slice() };
+try { const v = JSON.parse(localStorage.getItem(STORE) || 'null'); if (v && Array.isArray(v.imgs)) custom = { imgs: v.imgs.slice(0, 5), titles: (v.titles || DEF_TITLES).slice(0, 5) }; } catch (e) {}
+const srcOf = i => custom.imgs[i] || IMGS[i];
+custom.titles.forEach((t, i) => { if (t) GEMS[i].title = t; });
+const PICS = IMGS.map((u, i) => { const im = new Image(); im.src = srcOf(i); return im; });
 const NT = GEMS.length, N = Math.min(innerWidth, innerHeight) < 600 ? 6 : 8;   // 手機 6×6，電腦 8×8
 
 /* ======================== 版面 ======================== */
@@ -543,6 +571,48 @@ function frame(now) {
   ctx.restore();
   requestAnimationFrame(frame);
 }
+/* ======================== 自訂圖示 ======================== */
+const cfgEl = $('cfg'), slotsEl = $('slots'), fileIn = $('cFile');
+let draft = null, pickIdx = 0;
+function shrink(file) { // 讀檔 → 縮到 320px 內 → 壓縮成 dataURL
+  return new Promise((res, rej) => {
+    const fr = new FileReader(); fr.onerror = rej;
+    fr.onload = () => { const im = new Image(); im.onerror = rej; im.onload = () => {
+      const M = 320, k = Math.min(1, M / Math.max(im.width, im.height)), c = document.createElement('canvas');
+      c.width = Math.round(im.width * k); c.height = Math.round(im.height * k); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+      let u = c.toDataURL('image/webp', .86); if (!u.startsWith('data:image/webp')) u = c.toDataURL('image/jpeg', .86);
+      res(u); }; im.src = fr.result; };
+    fr.readAsDataURL(file);
+  });
+}
+const esc = t => String(t || '').replace(/[&"<>]/g, ch => ({ '&': '&amp;', '"': '&quot;', '<': '&lt;', '>': '&gt;' }[ch]));
+function renderSlots() {
+  slotsEl.innerHTML = '';
+  GEMS.forEach((G, i) => {
+    const d = document.createElement('div'); d.className = 'slot'; d.style.setProperty('--c', G.c2);
+    d.innerHTML = `<div class="pic"><span>${i + 1}</span></div>
+      <div><label>台詞（${draft.imgs[i] ? '自訂圖片' : '預設圖片'}）</label><input type="text" maxlength="12" value="${esc(draft.titles[i])}">
+      <div class="row"><button data-k="pick">📷 換這張</button><button data-k="def">↺ 這張用預設</button></div></div>`;
+    d.querySelector('.pic').style.backgroundImage = `url("${draft.imgs[i] || IMGS[i]}")`;
+    d.querySelector('.pic').onclick = d.querySelector('[data-k=pick]').onclick = () => { pickIdx = i; fileIn.value = ''; fileIn.click(); };
+    d.querySelector('[data-k=def]').onclick = () => { draft.imgs[i] = null; draft.titles[i] = DEF_TITLES[i]; renderSlots(); };
+    d.querySelector('input').oninput = e => { draft.titles[i] = e.target.value; };
+    slotsEl.appendChild(d);
+  });
+}
+fileIn.onchange = async () => { const f = fileIn.files[0]; if (!f) return; try { draft.imgs[pickIdx] = await shrink(f); renderSlots(); } catch (e) { alert('這張圖片讀取失敗，請換一張試試。'); } };
+$('bPic').onclick = () => { draft = { imgs: custom.imgs.slice(), titles: custom.titles.slice() }; renderSlots(); cfgEl.classList.add('on'); };
+$('cClose').onclick = () => cfgEl.classList.remove('on');
+$('cReset').onclick = () => { draft = { imgs: [null, null, null, null, null], titles: DEF_TITLES.slice() }; renderSlots(); };
+$('cApply').onclick = async () => {
+  custom = { imgs: draft.imgs.slice(), titles: draft.titles.map((t, i) => (t || '').trim() || DEF_TITLES[i]) };
+  try { localStorage.setItem(STORE, JSON.stringify(custom)); } catch (e) { alert('瀏覽器儲存空間不足：這次套用有效，但重新整理後會恢復原圖。'); }
+  custom.titles.forEach((t, i) => GEMS[i].title = t);
+  await Promise.all(PICS.map((im, i) => { im.src = srcOf(i); return im.decode ? im.decode().catch(() => {}) : null; }));
+  resize(); cfgEl.classList.remove('on');
+  beasts.length = 0; summon((Math.random() * NT) | 0);
+  fx.push({ k: 'banner', s: '圖示已更新！', life: 1.4, max: 1.4, col: '#ffd54a' });
+};
 Promise.all(PICS.map(im => im.decode ? im.decode().catch(() => {}) : null)).then(() => { resize(); setLevel(1); requestAnimationFrame(frame); });
 if (/[?&]debug/.test(location.search)) window.__g = { S, grid: () => grid, trySwap, at, findMove, summon, comboSwap, fx, setT: (r, c, t, sp) => { grid[r][c].t = t; grid[r][c].sp = sp || null; } };
 })();
