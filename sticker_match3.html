@@ -57,7 +57,7 @@ const GEMS = [
   { name: '奴性堅強', c1: '#ecd0ff', c2: '#a855f7', c3: '#2c0a52', glow: '#b878ff', title: '奴性堅強！' },
 ];
 const PICS = IMGS.map(u => { const im = new Image(); im.src = u; return im; });
-const NT = GEMS.length, N = 8;
+const NT = GEMS.length, N = Math.min(innerWidth, innerHeight) < 600 ? 6 : 8;   // 手機 6×6，電腦 8×8
 
 /* ======================== 版面 ======================== */
 let W, H, DPR, cs, ox, oy, sprites = [], beastSprite;
@@ -98,7 +98,7 @@ let bgCache;
 function resize() {
   DPR = Math.min(devicePixelRatio || 1, 2); W = innerWidth; H = innerHeight;
   cv.width = W * DPR; cv.height = H * DPR; ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-  const top = 110, bottom = 70, size = Math.min(W * .94, H - top - bottom, 640);
+  const top = 110, bottom = 70, size = Math.min((W - 14) / (1 + .36 / N), H - top - bottom, 640);
   cs = size / N; ox = (W - size) / 2; oy = top + (H - top - bottom - size) / 2;
   const S = Math.ceil(cs * DPR * 1.15);
   sprites = GEMS.map((_, t) => makeSprite(t, S)); beastSprite = makeBeastSprite(S);
@@ -386,7 +386,7 @@ function afterSwap() {
 /* ======================== 關卡 ======================== */
 const ov = $('ov');
 function setLevel(n, keepScore = false) {
-  S.level = n; S.target = 3000 + (n - 1) * 1800; S.moves = Math.max(16, 24 - Math.floor((n - 1) / 2)); if (!keepScore) S.score = 0;
+  S.level = n; S.target = Math.round((3000 + (n - 1) * 1800) * N * N / 64 / 100) * 100; S.moves = Math.max(16, 24 - Math.floor((n - 1) / 2)); if (!keepScore) S.score = 0;
   S.levelStart = S.score; S.target += S.score; newBoard(true); S.phase = 'fall'; S.combo = 0; updHud();
   fx.push({ k: 'banner', s: `第 ${n} 關`, life: 1.6, max: 1.6, col: '#ffd54a' });
 }
